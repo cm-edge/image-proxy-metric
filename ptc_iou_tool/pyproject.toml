@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ptc_iou_tool"
+version = "0.1.0"
+description = "GT-free time consistency metric (PTC-IoU) for object detection"
+readme = "README.md"
+requires-python = ">=3.9"
+authors = [{ name = "Zhenghao" }]
+license = "MIT"
+
+dependencies = [
+  "numpy",
+  "torch",
+  "torchvision",
+  "pillow",
+]
+
+[tool.setuptools]
+# 你的包目录是 ptc_iou_tool/（不使用 src/ 结构时，这样写最省事）
+packages = ["ptc_iou_tool"]
+
+[project.scripts]
+ptc-iou = "ptc_iou_tool.cli:main"

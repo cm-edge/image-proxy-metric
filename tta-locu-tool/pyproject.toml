@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tta-locu-tool"
+version = "0.1.0"
+description = "GT-free TTA-based localization uncertainty metric (Loc-U) for object detection"
+readme = "README.md"
+requires-python = ">=3.9"
+license = "MIT"
+authors = [
+  { name = "Zhenghao" }
+]
+
+dependencies = [
+  "numpy",
+  "opencv-python",
+  "torch",
+  "torchvision",
+  "pillow",
+  "det-shared",
+]
+
+[tool.setuptools]
+packages = ["tta_locu_tool"]
+
+[project.scripts]
+tta-locu = "tta_locu_tool.cli:main"
