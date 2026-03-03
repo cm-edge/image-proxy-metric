@@ -4,11 +4,12 @@ import csv
 from typing import List, Tuple, Optional, Set, Dict, Any
 import xml.etree.ElementTree as ET
 
+import tempfile
 import cv2
 import numpy as np
 from typing import Callable
 
-from det_shared.detector import Detector
+from shared.det_shared.detector import Detector
 
 
 # ============================================================
@@ -678,8 +679,9 @@ def run_locu_on_img_root(
 # ============================================================
 
 def compute_locu_for_image(
-    img: np.ndarray,
-    predict_fn: Callable[[np.ndarray], List[Det]],
+    img_path: str,
+    model_name: str,
+    detector_conf: float = 0.0,
     tta_mode: str = "grid",
     aug_types: Optional[List[str]] = None,
     n_runs: int = 10,
@@ -691,48 +693,83 @@ def compute_locu_for_image(
     nms_iou: float = 0.45,
     min_cov: int = 9,
 ) -> Tuple[float, int, int]:
+    """
+    Drop-in replacement (usage-level) for the old compute_locu_for_image:
+    - No predict_fn needed
+    - Uses shared.det_shared.Detector internally (path-based)
+    - Runs TTA and then calls compute_loc_u_for_frame_fixed
 
+    Returns:
+      loc_u, num_centers, num_kept_clusters
+    """
     if aug_types is None:
         aug_types = ["gamma", "brightness", "contrast"]
 
+    # read original image (for size + TTA generation)
+    img = cv2.imread(img_path)
+    if img is None:
+        raise FileNotFoundError(f"Cannot read image: {img_path}")
     H, W = img.shape[:2]
+
+    det = Detector(model_name, detector_conf)
+
     dets_each_run: List[List[Det]] = []
 
-    if tta_mode == "grid":
-        for aug in aug_types:
+    # temp dir for augmented images (detector needs path)
+    with tempfile.TemporaryDirectory(prefix="tta_locu_tmp_") as td:
+        run_id = 0
 
-            if (kmin is not None) and (kmax is not None):
-                kmin_eff, kmax_eff = float(kmin), float(kmax)
-            else:
-                kmin_eff, kmax_eff = default_k_range(aug)
+        if tta_mode == "grid":
+            for aug in aug_types:
+                if (kmin is not None) and (kmax is not None):
+                    kmin_eff, kmax_eff = float(kmin), float(kmax)
+                else:
+                    kmin_eff, kmax_eff = default_k_range(aug)
 
-            tta_imgs = generate_paper_tta_images(
+                tta_imgs = generate_paper_tta_images(
+                    img_bgr=img,
+                    aug_type=aug,
+                    n_runs=int(n_runs),
+                    kmin=kmin_eff,
+                    kmax=kmax_eff,
+                )
+
+                for _, im_aug in tta_imgs:
+                    tmp_path = os.path.join(td, f"run_{run_id:03d}.jpg")
+                    ok = cv2.imwrite(tmp_path, im_aug)
+                    if not ok:
+                        raise RuntimeError(f"Failed to write temp image: {tmp_path}")
+
+                    dets0 = det.detect(tmp_path)  # path in
+                    dets = [(float(l), float(t), float(w), float(h), float(s), str(c))
+                            for (l, t, w, h, s, c) in dets0]
+                    dets_each_run.append(dets)
+                    run_id += 1
+
+        elif tta_mode == "random":
+            tta_imgs = generate_random_tta_images(
                 img_bgr=img,
-                aug_type=aug,
-                n_runs=int(n_runs),
-                kmin=kmin_eff,
-                kmax=kmax_eff,
+                aug_types=list(aug_types),
+                total_runs=int(n_runs),
+                seed=int(seed),
+                kmin_global=kmin,
+                kmax_global=kmax,
             )
 
-            for _, im in tta_imgs:
-                dets_each_run.append(predict_fn(im))
+            for _, im_aug in tta_imgs:
+                tmp_path = os.path.join(td, f"run_{run_id:03d}.jpg")
+                ok = cv2.imwrite(tmp_path, im_aug)
+                if not ok:
+                    raise RuntimeError(f"Failed to write temp image: {tmp_path}")
 
-    elif tta_mode == "random":
+                dets0 = det.detect(tmp_path)
+                dets = [(float(l), float(t), float(w), float(h), float(s), str(c))
+                        for (l, t, w, h, s, c) in dets0]
+                dets_each_run.append(dets)
+                run_id += 1
 
-        tta_imgs = generate_random_tta_images(
-            img_bgr=img,
-            aug_types=list(aug_types),
-            total_runs=int(n_runs),
-            seed=int(seed),
-            kmin_global=kmin,
-            kmax_global=kmax,
-        )
-
-        for _, im in tta_imgs:
-            dets_each_run.append(predict_fn(im))
-
-    else:
-        raise ValueError(f"Unknown tta_mode: {tta_mode}")
+        else:
+            raise ValueError(f"Unknown tta_mode: {tta_mode}")
 
     return compute_loc_u_for_frame_fixed(
         dets_each_run=dets_each_run,

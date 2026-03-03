@@ -1,26 +1,22 @@
-from ptc_iou_tool.ptc_iou_tool.core import run_ptc_iou_on_img_root
+import os
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
 
-if __name__ == "__main__":
+from tta_locu_tool.tta_locu_tool.locu_core import run_locu_on_sequence
 
-    img_root = r"A:\dataset\DETRAC-Images-Subsets"
-    out_root = r"A:\dataset\out"
+res = run_locu_on_sequence(
+    seq_name="MVI_20011",
+    img_dir=r"A:/dataset/DETRAC-Images-Train/MVI_20011",
+    seq_xml_root=r"A:/dataset/DETRAC-Train-Annotations-XML",
+    out_root=r"A:/tmp/locu_out",
+    model_name="fasterrcnn_mobilenet_v3_large_320_fpn",
 
-    models = [
-        "fasterrcnn_mobilenet_v3_large_320_fpn",
-    ]
+    # 为了演示快一点
+    aug_types=["gamma"],
+    n_runs=10,
+    max_frames=20,
+)
 
-    confs = [0.5]
-
-    results = run_ptc_iou_on_img_root(
-        img_root=img_root,
-        out_root=out_root,
-        models=models,
-        confs=confs,
-        seq_xml_root=r"A:\dataset\DETRAC-Train-Annotations-XML",
-        iou_thr=0.5,
-        smooth=1,
-        max_frames=200,   # 先少跑一点测试
-        verbose=True
-    )
-
-    print("\nDONE.")
+print("Output dir:", res["out_dir"])
+print("Loc-U mean:", float(res["locu"].mean()))

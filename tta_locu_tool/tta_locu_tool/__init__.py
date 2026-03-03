@@ -1,5 +1,5 @@
 """
-tta-locu-tool: GT-free TTA-based localization uncertainty (Loc-U)
+tta_locu_tool: GT-free TTA-based localization uncertainty (Loc-U)
 
 Public APIs
 ===========
